@@ -1,0 +1,3 @@
+[submodule "nci-ansible-ui"]
+	path = nci-ansible-ui
+	url = git@github.com:node-ci/nci-ansible-ui.git
