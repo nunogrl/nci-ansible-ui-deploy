@@ -4,3 +4,67 @@
   become: yes
   become_method: sudo
   gather_facts: False
+  vars:
+    ncifolder: /opt/nci-ansible-ui
+    nciuser: ansible
+  tasks:
+  - name: Run the equivalent of "apt-get update" as a separate step
+    apt:
+      update_cache: yes
+  - name: Install a list of packages
+    apt:
+      name: "{{ packages }}"
+    vars:
+      packages:
+      - git
+      - curl
+  - name: grant permission to /opt
+    shell: chmod 777 /opt/.
+  - name: push nci to host
+    git:
+      repo: 'https://github.com/node-ci/nci-ansible-ui-quick-setup'
+      dest: "{{ ncifolder }}"
+    become: true
+    become_user: "{{ nciuser }}"
+  - name: install node 8
+    shell: curl -sL https://deb.nodesource.com/setup_8.x | bash -
+  - name: Install nodejs - debian package
+    apt:
+      name: nodejs
+  - name: install nci node dependencies
+    shell: npm install
+    args:
+      chdir: "{{ ncifolder }}"
+    become: true
+    become_user: "{{ nciuser }}"
+  - name: remove permissions on /opt
+    shell: chmod 755 /opt/.
+  - name: create the daemon
+    shell: | 
+      cat <<-'DAEMON' > /opt/nci-ansible-ui/nci.sh
+      #!/bin/sh
+      
+      (cd /opt/nci-ansible-ui ; ./node_modules/.bin/nci)
+  - name: create the nci Service
+    shell: | 
+      cat <<-'SERVICE' > /etc/systemd/system/nci.service
+      [Unit]
+      Description=NodeCI ansible service
+      After=network.target
+      StartLimitIntervalSec=0
+      
+      [Service]
+      Environment=NODE_PORT=3000
+      Type=simple
+      Restart=on-failure
+      RestartSec=1
+      User=ansible
+      ExecStart=/bin/sh /opt/nci-ansible-ui/nci.sh
+      
+      [Install]
+      WantedBy=multi-user.target
+  - name: start the nci service
+    systemd:
+      name: nci
+      enabled: yes
+      masked: no
